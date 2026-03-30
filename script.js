@@ -37,15 +37,11 @@ const CASES = [
     ]}
 ];
 
-// --- СОСТОЯНИЕ ---
-let balance = localStorage.getItem('bal') !== null ? Number(localStorage.getItem('bal')) : 5000;
+let balance = localStorage.getItem('bal') ? Number(localStorage.getItem('bal')) : 5000;
 let inv = JSON.parse(localStorage.getItem('inv')) || [];
 let upId = null, conIds = [], isSpinning = false, isTurbo = false;
 
-window.onload = () => {
-    save();
-    renderCases();
-};
+window.onload = () => { save(); renderCases(); };
 
 function save() {
     localStorage.setItem('bal', balance);
@@ -60,172 +56,103 @@ function router(pageId) {
     document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
     const target = document.getElementById('sec-' + pageId);
     if (target) target.style.display = 'block';
-    
     upId = null; conIds = []; 
-    const failText = document.getElementById('fail-text');
-    if (failText) failText.remove();
-    
+    const fail = document.getElementById('fail-text'); if (fail) fail.remove();
     if (pageId === 'cases') renderCases();
     render();
 }
 
 function renderCases() {
-    const grid = document.getElementById('casesGrid');
-    if (grid) {
-        grid.innerHTML = CASES.map((c, idx) => `
-            <div class="card" onclick="goToCase(${idx})">
-                <img src="${c.img}">
-                <h3>${c.name}</h3>
-                <p>${c.price} ₽</p>
-            </div>
-        `).join('');
-    }
+    const g = document.getElementById('casesGrid');
+    if (g) g.innerHTML = CASES.map((c, i) => `<div class="card" onclick="goToCase(${i})"><img src="${c.img}"><h3>${c.name}</h3><p>${c.price} ₽</p></div>`).join('');
 }
 
 function render() {
-    const activePage = document.querySelector('.page:not([style*="display: none"])');
-    if (!activePage) return;
-    const pageId = activePage.id;
+    const active = document.querySelector('.page:not([style*="display: none"])');
+    if (!active) return;
+    const pageId = active.id;
 
-    // Генерируем HTML инвентаря
     const html = inv.map(i => {
-        const isSelected = (String(upId) === String(i.id)) || conIds.includes(String(i.id));
-        let extra = (pageId === 'sec-inventory') ? `<button onclick="sell('${i.id}'); event.stopPropagation()" class="action-btn sell-btn" style="padding:5px; margin-top:10px; font-size:12px;">Продать</button>` : '';
-        return `
-            <div class="card ${isSelected ? 'selected' : ''}" onclick="handleItemClick('${i.id}')">
-                <img src="${i.img}">
-                <h4>${i.n}</h4>
-                <p>${i.p} ₽</p>
-                ${extra}
-            </div>`;
+        const sel = (String(upId) === String(i.id)) || conIds.includes(String(i.id));
+        let btn = (pageId === 'sec-inventory') ? `<button onclick="sell('${i.id}'); event.stopPropagation()" class="action-btn sell-btn" style="padding:5px; margin-top:5px; font-size:10px;">Продать</button>` : '';
+        return `<div class="card ${sel ? 'selected' : ''}" onclick="handleItemClick('${i.id}')"><img src="${i.img}"><h4>${i.n}</h4><p>${i.p} ₽</p>${btn}</div>`;
     }).join('');
 
-    // Отрисовываем в нужную сетку
-    const grids = ['inventoryGrid', 'upInvGrid', 'conInvGrid'];
-    grids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = html;
-    });
+    ['inventoryGrid', 'upInvGrid', 'conInvGrid'].forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = html; });
 
-    // Обновление специфичных элементов страниц
-    if (pageId === 'sec-upgrade') updateWheel();
-    
     if (pageId === 'sec-contract') {
-        const conList = document.getElementById('conSelectedList');
-        if (conList) {
-            conList.innerHTML = conIds.map(id => {
-                const item = inv.find(x => String(x.id) === id);
-                return item ? `<div class="card selected"><img src="${item.img}"><p>${item.p} ₽</p></div>` : '';
-            }).join('');
-        }
-        if (document.getElementById('conCount')) document.getElementById('conCount').innerText = conIds.length;
-        const sum = conIds.reduce((s, cid) => s + (inv.find(x => String(x.id) === cid)?.p || 0), 0);
-        if (document.getElementById('conSum')) document.getElementById('conSum').innerText = sum;
+        const cl = document.getElementById('conSelectedList');
+        if (cl) cl.innerHTML = conIds.map(id => {
+            const it = inv.find(x => String(x.id) === id);
+            return it ? `<div class="card selected"><img src="${it.img}"><p>${it.p} ₽</p></div>` : '';
+        }).join('');
     }
 }
 
 function handleItemClick(id) {
-    const activePage = document.querySelector('.page:not([style*="display: none"])');
-    if (!activePage) return;
-    const pageId = activePage.id;
-    const itemId = String(id);
+    const active = document.querySelector('.page:not([style*="display: none"])');
+    if (!active) return;
+    const sid = String(id);
+    const item = inv.find(x => String(x.id) === sid);
+    if (!item) return;
 
-    if (pageId === 'sec-upgrade') {
-        upId = (upId === itemId) ? null : itemId;
-        const item = inv.find(x => String(x.id) === upId);
-        const box = document.getElementById('up-item-box');
-        if (box) box.innerHTML = item ? `<b>${item.n}</b><br>${item.p} ₽` : "Выберите скин";
-        const btn = document.getElementById('runUpBtn');
-        if (btn) btn.disabled = !item;
+    if (active.id === 'sec-upgrade') {
+        upId = (upId === sid) ? null : sid;
+        document.getElementById('up-item-box').innerHTML = upId ? `<b>${item.n}</b><br>${item.p} ₽` : "Выберите скин";
+        document.getElementById('runUpBtn').disabled = !upId;
+        updateWheel();
     }
-
-    if (pageId === 'sec-contract') {
-        if (conIds.includes(itemId)) {
-            conIds = conIds.filter(x => x !== itemId);
-        } else if (conIds.length < 10) {
-            conIds.push(itemId);
-        }
-        const btn = document.getElementById('conBtn');
-        if (btn) btn.disabled = (conIds.length < 3);
+    if (active.id === 'sec-contract') {
+        if (conIds.includes(sid)) conIds = conIds.filter(x => x !== sid);
+        else if (conIds.length < 10) conIds.push(sid);
+        document.getElementById('conBtn').disabled = (conIds.length < 3);
     }
     render();
 }
 
 function updateWheel() {
-    const chInput = document.getElementById('upChance');
-    if (!chInput) return;
-    const ch = chInput.value;
-    const label = document.getElementById('upLabel');
-    if (label) label.innerText = ch;
-    
+    const ch = document.getElementById('upChance')?.value || 50;
+    if (document.getElementById('upLabel')) document.getElementById('upLabel').innerText = ch;
     const item = inv.find(x => String(x.id) === upId);
-    const winText = document.getElementById('upWin');
-    if (item && winText) winText.innerText = Math.floor(item.p * (100 / ch));
-    
-    const circle = document.getElementById('progressCircle');
-    if (circle) circle.style.strokeDashoffset = 283 - (283 * ch / 100);
-}
-
-function toggleTurbo() {
-    isTurbo = !isTurbo;
-    const btn = document.getElementById('turbo-btn');
-    if (btn) btn.classList.toggle('active', isTurbo);
+    if (item && document.getElementById('upWin')) document.getElementById('upWin').innerText = Math.floor(item.p * (100 / ch));
+    const circ = document.getElementById('progressCircle');
+    if (circ) circ.style.strokeDashoffset = 283 - (283 * ch / 100);
 }
 
 function runUpgrade() {
     const idx = inv.findIndex(x => String(x.id) === upId);
     if (idx === -1) return;
-
-    const visualCh = Number(document.getElementById('upChance').value);
-    const realCh = visualCh / 1.5; 
-    
+    const vch = Number(document.getElementById('upChance').value);
+    const rch = vch / 1.5; // Скрытый шанс
     const wheel = document.getElementById('wheel');
-    const runBtn = document.getElementById('runUpBtn');
-    if (runBtn) runBtn.disabled = true;
-
-    const oldFail = document.getElementById('fail-text');
-    if (oldFail) oldFail.remove();
-
-    const isWin = (Math.random() * 100) <= realCh;
-    let finalAngle = isWin ? Math.random() * (visualCh * 3.6) : (visualCh * 3.6 + 5) + Math.random() * (350 - visualCh * 3.6);
-
-    const totalRotation = 1800 + (360 - finalAngle);
-    wheel.style.transition = isTurbo ? '1.2s cubic-bezier(0.15, 0, 0.15, 1)' : '4s cubic-bezier(0.15, 0, 0.15, 1)';
-    wheel.style.transform = `rotate(${totalRotation - 90}deg)`;
+    document.getElementById('runUpBtn').disabled = true;
+    const isWin = (Math.random() * 100) <= rch;
+    let angle = isWin ? Math.random() * (vch * 3.6) : (vch * 3.6 + 10) + Math.random() * (340 - vch * 3.6);
+    const rot = 1800 + (360 - angle);
+    wheel.style.transition = isTurbo ? '1s cubic-bezier(0.15,0,0.15,1)' : '4s cubic-bezier(0.15,0,0.15,1)';
+    wheel.style.transform = `rotate(${rot - 90}deg)`;
 
     setTimeout(() => {
         if (isWin) {
-            const newItem = { n: inv[idx].n + " +", p: Math.floor(inv[idx].p * (100 / visualCh)), img: inv[idx].img, id: "it" + Date.now() };
-            inv.splice(idx, 1);
-            inv.push(newItem);
-            showModal(newItem);
+            const it = { n: inv[idx].n + " +", p: Math.floor(inv[idx].p * (100 / vch)), img: inv[idx].img, id: "it" + Date.now() };
+            inv.splice(idx, 1); inv.push(it); showModal(it);
         } else {
             inv.splice(idx, 1);
-            const fail = document.createElement('div');
-            fail.id = 'fail-text';
-            fail.innerHTML = "УВЫ";
-            fail.style = "position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:var(--gold); font-size:45px; font-weight:900; animation: failAnim 0.5s ease-out; z-index:15; pointer-events:none;";
-            document.querySelector('.upgrade-visual').appendChild(fail);
+            const f = document.createElement('div'); f.id = 'fail-text'; f.innerHTML = "УВЫ";
+            f.style = "position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:var(--gold); font-size:40px; font-weight:900; animation: failAnim 0.5s ease-out; z-index:15;";
+            document.querySelector('.upgrade-visual').appendChild(f);
         }
-        setTimeout(() => {
-            wheel.style.transition = 'none';
-            wheel.style.transform = 'rotate(-90deg)';
-            upId = null; save();
-        }, 800);
-    }, isTurbo ? 1300 : 4100);
+        setTimeout(() => { wheel.style.transition = 'none'; wheel.style.transform = 'rotate(-90deg)'; upId = null; save(); }, 800);
+    }, isTurbo ? 1100 : 4100);
 }
 
 function runContract() {
-    if (conIds.length < 3) return;
     const sum = conIds.reduce((s, id) => s + (inv.find(x => String(x.id) === id)?.p || 0), 0);
     inv = inv.filter(x => !conIds.includes(String(x.id)));
-    const contractWin = { n: "Из контракта", p: Math.floor(sum * (0.8 + Math.random() * 0.7)), img: "img/i4.png", id: "it" + Date.now() };
-    inv.push(contractWin);
-    conIds = []; save();
-    showModal(contractWin);
+    const win = { n: "Из контракта", p: Math.floor(sum * (0.8 + Math.random() * 0.7)), img: "img/i4.png", id: "it" + Date.now() };
+    inv.push(win); conIds = []; save(); showModal(win);
 }
 
-// --- КЕЙСЫ ---
 function goToCase(idx) {
     router('open-case');
     const c = CASES[idx];
@@ -240,7 +167,6 @@ function openCase(idx, fast) {
     const total = CASES[idx].drop.reduce((s, i) => s + i.weight, 0);
     let r = Math.random() * total, winItem;
     for (let i of CASES[idx].drop) { if (r < i.weight) { winItem = i; break; } r -= i.weight; }
-    
     const win = {...winItem, id: "it" + Date.now()};
     balance -= CASES[idx].price;
     if (fast) { inv.push(win); showModal(win); save(); } 
@@ -249,44 +175,31 @@ function openCase(idx, fast) {
 
 function spinAnim(idx, win) {
     const track = document.getElementById('rouletteTrack');
-    const itemW = 184, winPos = 40;
-    let h = "";
-    for(let i=0; i<55; i++) {
-        const item = (i === winPos) ? win : CASES[idx].drop[Math.floor(Math.random() * CASES[idx].drop.length)];
-        h += `<div class="roulette-item"><img src="${item.img}"></div>`;
-    }
-    track.innerHTML = h;
-    track.style.transition = "none";
-    track.style.transform = "translateX(0)";
+    const itemW = 160, winPos = 40;
+    track.innerHTML = Array(55).fill(0).map((_, i) => {
+        const it = (i === winPos) ? win : CASES[idx].drop[Math.floor(Math.random() * CASES[idx].drop.length)];
+        return `<div class="roulette-item"><img src="${it.img}"></div>`;
+    }).join('');
+    track.style.transition = "none"; track.style.transform = "translateX(0)";
     setTimeout(() => {
         track.style.transition = "transform 4s cubic-bezier(0.15, 0, 0.15, 1)";
-        const offset = -(winPos * itemW) + (track.parentElement.offsetWidth / 2) - (itemW / 2);
-        track.style.transform = `translateX(${offset}px)`;
+        const off = -(winPos * itemW) + (track.parentElement.offsetWidth / 2) - (itemW / 2);
+        track.style.transform = `translateX(${off}px)`;
     }, 50);
     setTimeout(() => { isSpinning = false; inv.push(win); showModal(win); save(); }, 4500);
 }
 
-// --- МОДАЛКА И ПРОДАЖА ---
-function showModal(item) {
-    const modal = document.getElementById('drop-modal');
-    document.getElementById('m-img').src = item.img;
-    document.getElementById('m-name').innerText = item.n;
-    document.getElementById('m-price').innerText = item.p + " ₽";
-    document.getElementById('m-sell').onclick = () => {
-        const idx = inv.findIndex(x => x.id === item.id);
-        if (idx !== -1) { balance += inv[idx].p; inv.splice(idx, 1); save(); }
-        closeModal();
-    };
-    modal.style.display = 'flex';
+function showModal(it) {
+    const m = document.getElementById('drop-modal');
+    document.getElementById('m-img').src = it.img;
+    document.getElementById('m-name').innerText = it.n;
+    document.getElementById('m-price').innerText = it.p + " ₽";
+    document.getElementById('m-sell').onclick = () => { sell(it.id); closeModal(); };
+    m.style.display = 'flex';
 }
-
 function closeModal() { document.getElementById('drop-modal').style.display = 'none'; }
-
-function sell(id) {
-    const idx = inv.findIndex(x => String(x.id) === String(id));
-    if (idx !== -1) { balance += inv[idx].p; inv.splice(idx, 1); save(); }
-}
-
+function sell(id) { const i = inv.findIndex(x => String(x.id) === String(id)); if (i !== -1) { balance += inv[i].p; inv.splice(i, 1); save(); } }
 function sellAll() { inv.forEach(i => balance += i.p); inv = []; save(); }
+function toggleTurbo() { isTurbo = !isTurbo; document.getElementById('turbo-btn').classList.toggle('active', isTurbo); }
+function getTgBonus() { balance += 1000; save(); alert("Бонус 1000₽ зачислен!"); }
 
-function getTgBonus() { balance += 1000; save(); alert("Бонус за подписку 1000 ₽ зачислен!"); }
